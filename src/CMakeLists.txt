@@ -16,6 +16,8 @@ target_link_libraries(${component}
 )
 
 # build events
+# set(RUNTIME_OUTPUT_DIR $<TARGET_FILE_DIR:${component}>)
+#
 # add_custom_command(TARGET ${component}
 #     POST_BUILD
 #     COMMAND
