@@ -1,6 +1,7 @@
 set(component internal)
 
 add_library(${component} STATIC "")
+add_library(MyComponentAlias ALIAS ${component})
 
 set_property(TARGET ${component}
     PROPERTY PUBLIC_HEADER
