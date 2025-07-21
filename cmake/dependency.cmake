@@ -4,27 +4,57 @@
 function(depends)
     set(options
 
+        # use the CMake FindPackage functionality (NO_MODULE)
         PACKAGE
+        # use the CMake Module FindPackage
         MODULE
+        # import precompiled libraries
         PRECOMPILED
+        # header only (INTERFACE)
         HEADERONLY
+
+        # package is whether found from source or from install paths
+        FROM_SOURCE
+
+        # download files or clone from URL and use as PACKAGE
+        FETCH
+
+        # add_subdirectory
+        SUBDIRECTORY
+        SUBMODULE
 
         STATIC # does nothing
         SHARED # default to STATIC
+        # configure files (https://cmake.org/cmake/help/latest/command/configure_file.html)
         CONFIGURE_DEPENDS
     )
     set(keywords
 
+        # package source directory
+        DIRECTORY
+        # package configuration file (*Config.cmake, *-config.cmake)
         CONFIG
+        # package required version
         VERSION
 
+        # generated target name
         OUTPUT_TARGET
+        # libraries debug suffix (*d.lib)
         DEBUG_SUFFIX
+
+        # link from which to download an archive or installation files
+        DL_URL
+        # link from which to clone a source repository
+        GIT_URL
     )
     set(multikeywords
 
+        # libraries path
         DIRECTORIES
+        # libraries name
         FILES
+        # include directories
+        INCLUDE_PATHS
     )
     cmake_parse_arguments(arg_depends
         "${options}"
@@ -34,15 +64,33 @@ function(depends)
     )
 
     if (${arg_depends_PACKAGE})
-        depends_package("${arg_depends_DIRECTORIES}" "${arg_depends_CONFIG}" "${arg_depends_VERSION}")
+        depends_package("${arg_depends_FROM_SOURCE}"
+            "${arg_depends_DIRECTORY}"
+            "${arg_depends_CONFIG}"
+            "${arg_depends_VERSION}"
+            "${arg_depends_INCLUDE_PATHS}"
+        )
     elseif (${arg_depends_MODULE})
         depends_module()
     elseif (${arg_depends_PRECOMPILED})
-        depends_precompiled("${arg_depends_SHARED}" "${arg_depends_CONFIGURE_DEPENDS}" "${arg_depends_OUTPUT_TARGET}" "${arg_depends_DIRECTORIES}" "${arg_depends_FILES}" "${arg_depends_DEBUG_SUFFIX}")
+        depends_precompiled("${arg_depends_SHARED}"
+            "${arg_depends_CONFIGURE_DEPENDS}"
+            "${arg_depends_OUTPUT_TARGET}"
+            "${arg_depends_DIRECTORIES}"
+            "${arg_depends_FILES}"
+            "${arg_depends_DEBUG_SUFFIX}"
+            "${arg_depends_INCLUDE_PATHS}"
+        )
     elseif (${arg_depends_HEADERONLY})
         depends_headeronly()
+    elseif (${arg_depends_FETCH})
+        depends_fetch("${arg_depends_DL_URL}" "${arg_depends_GIT_URL}")
+    elseif (${arg_depends_SUBDIRECTORY})
+        depends_subdirectory("${arg_depends_DIRECTORY}")
+    elseif (${arg_depends_SUBMODULE})
+        depends_subdirectory("${arg_depends_DIRECTORY}")
     else()
-        message(FATAL_ERROR "A dependency type must be specified [PACKAGE|MODULE|PRECOMPILED|HEADERONLY]")
+        message(FATAL_ERROR "A dependency type must be specified")
     endif()
 endfunction()
 
@@ -51,41 +99,99 @@ endfunction()
 #
 # Based on nvpro_core2 integration
 # https://github.com/nvpro-samples/nvpro_core2
-function(depends_package PACKAGE_FOLDER_NAME CONFIG_NAME PACKAGE_VERSION)
-    message("\nLooking for ${PACKAGE_FOLDER_NAME} near ${CMAKE_SOURCE_DIR}...")
-    find_path(${PACKAGE_FOLDER_NAME}-DIR
-        NAMES CMakeLists.txt
-        PATHS ${CMAKE_CURRENT_LIST_DIR}/${PACKAGE_FOLDER_NAME}
-            ${CMAKE_SOURCE_DIR}/${PACKAGE_FOLDER_NAME}
-            ${CMAKE_SOURCE_DIR}/../${PACKAGE_FOLDER_NAME}
-            ${CMAKE_SOURCE_DIR}/../../${PACKAGE_FOLDER_NAME}
-        REQUIRED
-    )
-    message("${PACKAGE_FOLDER_NAME}-DIR=${${PACKAGE_FOLDER_NAME}-DIR}")
-    
-    # TODO : fix condition
-    if (${${PACKAGE_FOLDER_NAME}-DIR} EQUAL ${PACKAGE_FOLDER_NAME}-NOTFOUND)
-        message("${PACKAGE_FOLDER_NAME} was not found")
+function(depends_package
+    FROM_SOURCE
+    SOURCE_DIR
+    CONFIG_NAME
+    PACKAGE_VERSION
+    INCLUDE_PATHS
+)
+    string(TOLOWER ${CONFIG_NAME} CONFIG_NAME_LOWER)
 
-        if (CLONE_FROM_URL)
-            # TODO
-            message("Cloning from ${${PACKAGE_FOLDER_NAME}-URL}...")
-        endif()
+    if (FROM_SOURCE AND NOT SOURCE_DIR)
+        message(FATAL_ERROR "Source directory must be specified with DIRECTORY keyword if FROM_SOURCE option is enabled")
+    endif()
+
+    if (NOT FROM_SOURCE)
+        set(SOURCE_DIR ${CONFIG_NAME})
+        message("\nLooking for ${CONFIG_NAME} in default PATHs...")
+
+        find_package(${CONFIG_NAME} ${PACKAGE_VERSION} REQUIRED NO_MODULE GLOBAL)
+
     else()
-        message("${PACKAGE_FOLDER_NAME} was found : ${${PACKAGE_FOLDER_NAME}-DIR}")
-
-        string(TOLOWER ${CONFIG_NAME} CONFIG_NAME_LOWER)
-        find_path(${PACKAGE_FOLDER_NAME}_CONFIG
-            NAMES ${CONFIG_NAME}Config.cmake
-                ${CONFIG_NAME_LOWER}-config.cmake
-            PATHS ${${PACKAGE_FOLDER_NAME}-DIR}/build
+        message("\nLooking for ${SOURCE_DIR} near ${CMAKE_SOURCE_DIR}...")
+        find_path(${SOURCE_DIR}-DIR
+            NAMES .
+            PATHS ${CMAKE_CURRENT_LIST_DIR}/${SOURCE_DIR}
+                ${CMAKE_SOURCE_DIR}/${SOURCE_DIR}
+                ${CMAKE_SOURCE_DIR}/../${SOURCE_DIR}
+                ${CMAKE_SOURCE_DIR}/../../${SOURCE_DIR}
+            NO_DEFAULT_PATH
+            NO_PACKAGE_ROOT_PATH
+            NO_CMAKE_PATH
+            NO_CMAKE_ENVIRONMENT_PATH
+            NO_SYSTEM_ENVIRONMENT_PATH
+            NO_CMAKE_SYSTEM_PATH
+            NO_CMAKE_INSTALL_PREFIX
             REQUIRED
         )
+        message("${SOURCE_DIR}-DIR : ${${SOURCE_DIR}-DIR}")
+        message("${SOURCE_DIR} was found : ${${SOURCE_DIR}-DIR}")
 
-        list(APPEND CMAKE_PREFIX_PATH ${${PACKAGE_FOLDER_NAME}-DIR})
-        find_package(${CONFIG_NAME} ${PACKAGE_VERSION} REQUIRED NO_MODULE)
+
+        file(GLOB_RECURSE CONFIG_FILES
+            "${${SOURCE_DIR}-DIR}/**/${CONFIG_NAME}Config.cmake"
+            "${${SOURCE_DIR}-DIR}/**/${CONFIG_NAME_LOWER}-config.cmake"
+            )
+        if (NOT CONFIG_FILES)
+            message(FATAL_ERROR "Failed to find ${CONFIG_NAME}Config.cmake or ${CONFIG_NAME_LOWER}-config.cmake in ${${SOURCE_DIR}-DIR}")
+        endif()
+        list(LENGTH CONFIG_FILES CONFIG_FILES_LENGTH)
+        message("Found ${CONFIG_FILES_LENGTH} config files :")
+        foreach(FILE IN LISTS CONFIG_FILES)
+            message("\t- ${FILE}")
+        endforeach()
+        list(GET CONFIG_FILES 0 CONFIG_FILE)
+        message("Using Config file : " ${CONFIG_FILE})
+
+
+        cmake_path(REMOVE_FILENAME CONFIG_FILE OUTPUT_VARIABLE CONFIG_PATH)
+        list(APPEND CMAKE_PREFIX_PATH ${CONFIG_PATH})
+
+    endif()
+    
+    find_package(${CONFIG_NAME} ${PACKAGE_VERSION} REQUIRED NO_MODULE GLOBAL)
+    
+    message("${CONFIG_NAME} is ready to link : see ${SOURCE_DIR} documentation to get the target name\n")
+    
+    if (${CONFIG_NAME}_LIBRARIES)
+        message("Some variables are available and saved in cache:")
+        if (${CONFIG_NAME}_DIR)
+            message("\t- ${CONFIG_NAME}_DIR")
+            set(${CONFIG_NAME}_DIR ${${CONFIG_NAME}_DIR} CACHE INTERNAL "${CONFIG_NAME} DIR variable")
+        endif()
+        if (${CONFIG_NAME}_VERSION)
+            message("\t- ${CONFIG_NAME}_VERSION")
+            set(${CONFIG_NAME}_VERSION ${${CONFIG_NAME}_VERSION} CACHE INTERNAL "${CONFIG_NAME} VERSION variable")
+        endif()
+        if (${CONFIG_NAME}_LIBS)
+            message("\t- ${CONFIG_NAME}_LIBS")
+            set(${CONFIG_NAME}_LIBS ${${CONFIG_NAME}_LIBS} CACHE INTERNAL "${CONFIG_NAME} LIBS variable")
+        endif()
+        if (${CONFIG_NAME}_LIBRARIES)
+            message("\t- ${CONFIG_NAME}_LIBRARIES")
+            set(${CONFIG_NAME}_LIBRARIES ${${CONFIG_NAME}_LIBRARIES} CACHE INTERNAL "${CONFIG_NAME} LIBRARIES variable")
+        endif()
+        if (${CONFIG_NAME}_INCLUDE_DIRS)
+            message("\t- ${CONFIG_NAME}_INCLUDE_DIRS")
+            set(${CONFIG_NAME}_INCLUDE_DIRS ${${CONFIG_NAME}_INCLUDE_DIRS} CACHE INTERNAL "${CONFIG_NAME} INCLUDE_DIRS variable")
+        endif()
         
-        message("${CONFIG_NAME} is ready to link\n")
+
+        message("But it is recommended to use the libraries target instead :")
+        foreach(LIB IN LISTS ${CONFIG_NAME}_LIBRARIES)
+            message("\t- ${LIB}")
+        endforeach()
     endif()
 
 endfunction()
@@ -97,67 +203,89 @@ endfunction()
 # precompiled library
 # default to STATIC
 # look for FOLDER_NAMES in default path and cmake paths if not specified
-function(depends_precompiled SHARED CONFIGURE_DEPENDS TARGET_NAME FOLDER_NAMES LIB_FILES DEBUG_SUFFIX)
-    list(LENGTH FOLDER_NAMES FOLDER_NAMES_LENGTH)
-    if (${FOLDER_NAMES_LENGTH} GREATER 0)
-        list(GET FOLDER_NAMES 0 FOLDER_NAME)
-        list(GET LIB_FILES 0 LIB_FILE)
+function(depends_precompiled
+    SHARED
+    CONFIGURE_DEPENDS
+    TARGET_NAME
+    FOLDER_NAMES
+    LIB_FILES
+    DEBUG_SUFFIX
+    INCLUDE_PATHS
+)
+    if (WIN32)
+        set(IMPLIB_EXTENSION "lib")
+        set(DYNLIB_EXTENSION "dll")
+    else()
+        message(FATAL_ERROR "No other platforms supported yet")
+    endif()
 
-        cmake_path(IS_ABSOLUTE FOLDER_NAME IS_ABS)
-        if (${IS_ABS})
-            message("\nLooking for ${LIB_FILE} in ${FOLDER_NAME}...")
-            cmake_path(CONVERT "${FOLDER_NAME}" TO_CMAKE_PATH_LIST FOLDER_NAME NORMALIZE)
-            find_path(${FOLDER_NAME}-DIR
-                NAMES .
-                PATHS ${FOLDER_NAME}
-                NO_DEFAULT_PATH
-                NO_PACKAGE_ROOT_PATH
-                NO_CMAKE_PATH
-                NO_CMAKE_ENVIRONMENT_PATH
-                NO_SYSTEM_ENVIRONMENT_PATH
-                NO_CMAKE_SYSTEM_PATH
-                NO_CMAKE_INSTALL_PREFIX
-                REQUIRED
-            )
-        else()
-            message("\nLooking for ${LIB_FILE} near ${CMAKE_SOURCE_DIR}...")
-            find_path(${FOLDER_NAME}-DIR
-                NAMES .
-                PATHS ${CMAKE_CURRENT_LIST_DIR}/${FOLDER_NAME}
-                    ${CMAKE_SOURCE_DIR}/${FOLDER_NAME}
-                    ${CMAKE_SOURCE_DIR}/../${FOLDER_NAME}
-                    ${CMAKE_SOURCE_DIR}/../../${FOLDER_NAME}
-                NO_DEFAULT_PATH
-                NO_PACKAGE_ROOT_PATH
-                NO_CMAKE_PATH
-                NO_CMAKE_ENVIRONMENT_PATH
-                NO_SYSTEM_ENVIRONMENT_PATH
-                NO_CMAKE_SYSTEM_PATH
-                NO_CMAKE_INSTALL_PREFIX
-                REQUIRED
-            )
+    list(LENGTH LIB_FILES LIB_FILES_LENGTH)
+    list(LENGTH FOLDER_NAMES FOLDER_NAMES_LENGTH)
+    if (${LIB_FILES_LENGTH} GREATER 0)
+        list(GET FOLDER_NAMES 0 FOLDER_NAME)
+        if (FOLDER_NAMES_LENGTH GREATER 1)
+            list(GET FOLDER_NAMES 1 SHARED_FOLDER_NAME)
+        endif()
+        list(GET LIB_FILES 0 LIB_FILE)
+        if (LIB_FILES_LENGTH GREATER 1)
+            list(GET LIB_FILES 1 SHARED_LIB_FILE)
         endif()
     else()
-        if (WIN32)
-            message("\nLooking for ${LIB_FILE} in default and cmake paths...")
-            set(FOLDER_NAME ${TARGET_NAME})
-            find_path(${FOLDER_NAME}-DIR
-                NAMES ${LIB_FILE}.lib
-                REQUIRED
-            )
-        else()
-            message(FATAL_ERROR "No other platforms supported yet")
-        endif()
+        message(FATAL_ERROR "At least one directory or file name must be specified")
     endif()
 
-    message("${FOLDER_NAME}-DIR=${${FOLDER_NAME}-DIR}")
+    cmake_path(IS_ABSOLUTE FOLDER_NAME IS_ABS)
+    if (FOLDER_NAMES_LENGTH GREATER 0 AND ${IS_ABS})
+        message("\nLooking for ${LIB_FILE} in ${FOLDER_NAME}...")
+        cmake_path(CONVERT "${FOLDER_NAME}" TO_CMAKE_PATH_LIST FOLDER_NAME NORMALIZE)
+        find_path(${FOLDER_NAME}-DIR
+            NAMES .
+            PATHS ${FOLDER_NAME}
+            NO_DEFAULT_PATH
+            NO_PACKAGE_ROOT_PATH
+            NO_CMAKE_PATH
+            NO_CMAKE_ENVIRONMENT_PATH
+            NO_SYSTEM_ENVIRONMENT_PATH
+            NO_CMAKE_SYSTEM_PATH
+            NO_CMAKE_INSTALL_PREFIX
+            REQUIRED
+        )
+    elseif(FOLDER_NAMES_LENGTH GREATER 0)
+        message("\nLooking for ${LIB_FILE} near ${CMAKE_SOURCE_DIR}...")
+        find_path(${FOLDER_NAME}-DIR
+            NAMES .
+            PATHS ${CMAKE_CURRENT_LIST_DIR}/${FOLDER_NAME}
+                ${CMAKE_SOURCE_DIR}/${FOLDER_NAME}
+                ${CMAKE_SOURCE_DIR}/../${FOLDER_NAME}
+                ${CMAKE_SOURCE_DIR}/../../${FOLDER_NAME}
+            NO_DEFAULT_PATH
+            NO_PACKAGE_ROOT_PATH
+            NO_CMAKE_PATH
+            NO_CMAKE_ENVIRONMENT_PATH
+            NO_SYSTEM_ENVIRONMENT_PATH
+            NO_CMAKE_SYSTEM_PATH
+            NO_CMAKE_INSTALL_PREFIX
+            REQUIRED
+        )
+    else()
+        message("\nLooking for ${LIB_FILE} in default and cmake paths...")
+        set(FOLDER_NAME ${TARGET_NAME})
+        find_path(${FOLDER_NAME}-DIR
+            NAMES ${LIB_FILE}.${IMPLIB_EXTENSION}
+            REQUIRED
+        )
+    endif()
 
-    # adding a pre compiled static/shared library (interface)
-    # https://cmake.org/cmake/help/latest/command/add_library.html#imported-libraries
+    message("${FOLDER_NAME}-DIR : ${${FOLDER_NAME}-DIR}")
+
+    # do nothing if target already exists
     if (TARGET ${TARGET_NAME})
+        message("${TARGET_NAME} already exists and is ready to link\n")
         return()
     endif()
-
+    
+    # adding a pre compiled static/shared library (interface)
+    # https://cmake.org/cmake/help/latest/command/add_library.html#imported-libraries
     if (NOT ${SHARED})
         add_library(${TARGET_NAME} STATIC IMPORTED GLOBAL)
     else()
@@ -167,91 +295,128 @@ function(depends_precompiled SHARED CONFIGURE_DEPENDS TARGET_NAME FOLDER_NAMES L
         LINKER_LANGUAGE CXX
     )
 
-
-    target_include_directories(${TARGET_NAME} INTERFACE ${${FOLDER_NAME}-DIR})
+    if (INCLUDE_PATHS)
+        target_include_directories(${TARGET_NAME} INTERFACE ${INCLUDE_PATHS})
+    else()
+        target_include_directories(${TARGET_NAME} INTERFACE ${${FOLDER_NAME}-DIR})
+    endif()
 
     if (NOT CONFIGURE_DEPENDS)
-        if (${FOLDER_NAMES_LENGTH} LESS 2)
-            target_link_libraries(${TARGET_NAME} INTERFACE ${${FOLDER_NAME}-DIR})
-        else()
-            list(GET FOLDER_NAMES 1 SHARED_FOLDER_NAME)
-            target_link_libraries(${TARGET_NAME} INTERFACE ${SHARED_FOLDER_NAME})
-        endif()
+        target_link_directories(${TARGET_NAME} INTERFACE ${${FOLDER_NAME}-DIR})
     endif()
 
 
-    if (WIN32)
-        if (NOT ${SHARED})
-            set_property(TARGET ${TARGET_NAME}
-                APPEND PROPERTY IMPORTED_LOCATION_DEBUG "${${FOLDER_NAME}-DIR}/${LIB_FILE}${DEBUG_SUFFIX}.lib"
-            )
-            set_property(TARGET ${TARGET_NAME}
-                APPEND PROPERTY IMPORTED_LOCATION_RELEASE "${${FOLDER_NAME}-DIR}/${LIB_FILE}.lib"
-            )
+    file(GLOB_RECURSE LIBD_NAMES "${${FOLDER_NAME}-DIR}/${LIB_FILE}${DEBUG_SUFFIX}.${IMPLIB_EXTENSION}")
+    if (NOT LIBD_NAMES)
+        file(GLOB_RECURSE LIBD_NAMES "${${FOLDER_NAME}-DIR}/**/${LIB_FILE}${DEBUG_SUFFIX}.${IMPLIB_EXTENSION}")
+    endif()
+    if (NOT LIBD_NAMES)
+        message(FATAL_ERROR "Failed to find ${LIB_FILE}${DEBUG_SUFFIX}.${IMPLIB_EXTENSION} in ${${FOLDER_NAME}-DIR}")
+    endif()
 
-        else()
-            set_property(TARGET ${TARGET_NAME}
-                APPEND PROPERTY IMPORTED_IMPLIP_DEBUG "${${FOLDER_NAME}-DIR}/${LIB_FILE}${DEBUG_SUFFIX}.lib"
-            )
-            set_property(TARGET ${TARGET_NAME}
-                APPEND PROPERTY IMPORTED_IMPLIB_RELEASE "${${FOLDER_NAME}-DIR}/${LIB_FILE}.lib"
-            )
+    list(LENGTH LIBD_NAMES LIBD_LENGTH)
+    message("Found ${LIBD_LENGTH} Debug static libraries :")
+    foreach(LIB IN LISTS LIBD_NAMES)
+        message("\t- ${LIB}")
+    endforeach()
+    list(GET LIBD_NAMES 0 LIBD_NAME)
+    message("Using : ${LIBD_NAME}")
 
-            # may require changing workspace directory (cwd, pwd) regarding the IDE
-            if (${FOLDER_NAMES_LENGTH} EQUAL 2)
-                list(LENGTH LIB_FILES LIB_FILES_LENGTH)
-                if (${LIB_FILES_LENGTH} LESS 2)
-                    message(FATAL_ERROR "Two paths were given but only 1 library names (or 0)")
-                endif()
+    cmake_path(REMOVE_FILENAME LIBD_NAME OUTPUT_VARIABLE LIBD_PATH)
+    target_link_directories(${TARGET_NAME} INTERFACE ${LIBD_PATH})
 
-                list(GET FOLDER_NAMES 1 SHARED_FOLDER_NAME)
-                list(GET LIB_FILES 1 SHARED_LIB_FILE)
 
-                set_property(TARGET ${TARGET_NAME}
-                    APPEND PROPERTY IMPORTED_LOCATION_DEBUG "${SHARED_FOLDER_NAME}/${SHARED_LIB_FILE}${DEBUG_SUFFIX}.dll"
-                )
-                set_property(TARGET ${TARGET_NAME}
-                    APPEND PROPERTY IMPORTED_LOCATION_RELEASE "${SHARED_FOLDER_NAME}/${SHARED_LIB_FILE}.dll"
-                )
-                
-                if (CONFIGURE_DEPENDS)
-                    configure_file(${SHARED_FOLDER_NAME}/${SHARED_LIB_FILE}.dll ${CMAKE_BINARY_DIR}/${SHARED_LIB_FILE}.dll COPYONLY)
-                endif()
-            else()
-                message(FATAL_ERROR "Does not support arbitrary lib and dll paths, please specify both paths")
+    file(GLOB_RECURSE LIB_NAMES "${${FOLDER_NAME}-DIR}/${LIB_FILE}.${IMPLIB_EXTENSION}")
+    if (NOT LIB_NAMES)
+        file(GLOB_RECURSE LIB_NAMES "${${FOLDER_NAME}-DIR}/**/${LIB_FILE}.${IMPLIB_EXTENSION}")
+    endif()
+    if (NOT LIB_NAMES)
+        message(FATAL_ERROR "Failed to find ${LIB_FILE}.${IMPLIB_EXTENSION} in ${${FOLDER_NAME}-DIR}")
+    endif()
 
-                set_property(TARGET ${TARGET_NAME}
-                    APPEND PROPERTY IMPORTED_LOCATION_DEBUG "${${FOLDER_NAME}-DIR}/${LIB_FILE}${DEBUG_SUFFIX}.dll"
-                )
-                set_property(TARGET ${TARGET_NAME}
-                    APPEND PROPERTY IMPORTED_LOCATION_RELEASE "${${FOLDER_NAME}-DIR}/${LIB_FILE}.dll"
-                )
+    list(LENGTH LIB_NAMES LIBD_LENGTH)
+    message("Found ${LIBD_LENGTH} Release static libraries :")
+    foreach(LIB IN LISTS LIB_NAMES)
+        message("\t- ${LIB}")
+    endforeach()
+    list(GET LIB_NAMES 0 LIB_NAME)
+    message("Using : ${LIB_NAME}")
 
-                file(GLOB_RECURSE SHARED_LIB_NAME ${${FOLDER_NAME}-DIR} ${LIB_FILE}.dll)
-                if (NOT SHARED_LIB_NAME)
-                    message(FATAL_ERROR "Failed to find ${LIB_FILE}.dll in ${${FOLDER_NAME}-DIR}")
-                endif()
+    cmake_path(REMOVE_FILENAME LIB_NAME OUTPUT_VARIABLE LIB_PATH)
+    target_link_directories(${TARGET_NAME} INTERFACE ${LIB_PATH})
 
-                if (CONFIGURE_DEPENDS)
-                    configure_file(${SHARED_LIB_NAME}.dll ${CMAKE_BINARY_DIR}/${LIB_FILE}.dll COPYONLY)
-                endif()
-            endif()
-            
-            # for install
-            install(FILES ${LIB_FILE}.dll TYPE BIN)
-
-        endif()
-
-        set_property(TARGET ${TARGET_NAME}
-            APPEND PROPERTY MAP_IMPORTED_CONFIG_MINSIZEREL Release
-        )
-        set_property(TARGET ${TARGET_NAME}
-            APPEND PROPERTY MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
-        )
+    
         
+    if (NOT ${SHARED})
+        message("Found static Debug library : ${LIBD_NAME}")
+        message("Found static library : ${LIB_NAME}")
+        set_target_properties(${TARGET_NAME} PROPERTIES
+            IMPORTED_LOCATION_DEBUG "${LIBD_NAME}"
+            IMPORTED_LOCATION_RELEASE "${LIB_NAME}"
+        )
+
     else()
-        message(FATAL_ERROR "No other platform supported yet")
+        set_target_properties(${TARGET_NAME} PROPERTIES
+            IMPORTED_IMPLIB_DEBUG "${LIBD_NAME}"
+            IMPORTED_IMPLIB_RELEASE "${LIB_NAME}"
+        )
+
+        if (${FOLDER_NAMES_LENGTH} EQUAL 2)
+            list(LENGTH LIB_FILES LIB_FILES_LENGTH)
+            if (${LIB_FILES_LENGTH} LESS 2)
+                message(FATAL_ERROR "Two paths were given but only 1 library names (or 0)")
+            endif()
+
+            set_target_properties(${TARGET_NAME} PROPERTIES
+                IMPORTED_LOCATION_DEBUG "${SHARED_FOLDER_NAME}/${SHARED_LIB_FILE}${DEBUG_SUFFIX}.${DYNLIB_EXTENSION}"
+                IMPORTED_LOCATION_RELEASE "${SHARED_FOLDER_NAME}/${SHARED_LIB_FILE}.${DYNLIB_EXTENSION}"
+            )
+            
+            if (CONFIGURE_DEPENDS)
+                configure_file(${SHARED_FOLDER_NAME}/${SHARED_LIB_FILE}.${DYNLIB_EXTENSION} ${CMAKE_BINARY_DIR}/${SHARED_LIB_FILE}.${DYNLIB_EXTENSION} COPYONLY)
+            endif()
+        else()
+            file(GLOB_RECURSE SHARED_LIBD_NAMES "${${FOLDER_NAME}-DIR}/**/${LIB_FILE}${DEBUG_SUFFIX}.${DYNLIB_EXTENSION}")
+            if (NOT SHARED_LIBD_NAMES)
+                message(FATAL_ERROR "Failed to find ${LIB_FILE}${DEBUG_SUFFIX}.${DYNLIB_EXTENSION} in ${${FOLDER_NAME}-DIR}")
+            endif()
+
+            list(LENGTH SHARED_LIBD_NAMES LIBD_LENGTH)
+            message("Found ${LIBD_LENGTH} Debug dynamic libraries :")
+            foreach(LIB IN LISTS SHARED_LIBD_NAMES)
+                message("\t- ${LIB}")
+            endforeach()
+            list(GET SHARED_LIBD_NAMES 0 SHARED_LIBD_NAME)
+            message("Using : ${SHARED_LIBD_NAME}")
+
+
+            file(GLOB_RECURSE SHARED_LIB_NAMES "${${FOLDER_NAME}-DIR}/**/${LIB_FILE}.${DYNLIB_EXTENSION}")
+            if (NOT SHARED_LIB_NAMES)
+                message(FATAL_ERROR "Failed to find ${LIB_FILE}.${DYNLIB_EXTENSION} in ${${FOLDER_NAME}-DIR}")
+            endif()
+
+            list(LENGTH SHARED_LIB_NAMES LIBD_LENGTH)
+            message("Found ${LIBD_LENGTH} Release dynamic libraries :")
+            foreach(LIB IN LISTS SHARED_LIB_NAMES)
+                message("\t- ${LIB}")
+            endforeach()
+            list(GET SHARED_LIB_NAMES 0 SHARED_LIB_NAME)
+            message("Using : ${SHARED_LIB_NAME}")
+
+            if (CONFIGURE_DEPENDS)
+                configure_file(${SHARED_LIB_NAME} ${CMAKE_BINARY_DIR}/${LIB_FILE}.${DYNLIB_EXTENSION} COPYONLY)
+            endif()
+
+        endif()
+        
+        install(FILES ${LIB_FILE}.${DYNLIB_EXTENSION} TYPE BIN)
+
     endif()
+
+    set_target_properties(${TARGET_NAME} PROPERTIES
+        MAP_IMPORTED_CONFIG_MINSIZEREL Release
+        MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
+    )
 
     message("${TARGET_NAME} is ready to be linked as ${TARGET_NAME}\n")
 
@@ -259,4 +424,45 @@ endfunction()
 
 # header only library
 function(depends_headeronly)
+endfunction()
+
+function(depends_fetch DL_URL GIT_URL)
+    message("Cloning from ${GIT_URL}...")
+endfunction()
+
+function(depends_subdirectory DIR)
+
+    find_path(IN_TREE_DIR
+        NAMES .
+        PATHS ${CMAKE_CURRENT_LIST_DIR}/${DIR}
+        NO_DEFAULT_PATH
+        NO_PACKAGE_ROOT_PATH
+        NO_CMAKE_PATH
+        NO_CMAKE_ENVIRONMENT_PATH
+        NO_SYSTEM_ENVIRONMENT_PATH
+        NO_CMAKE_SYSTEM_PATH
+        NO_CMAKE_INSTALL_PREFIX
+        OPTIONAL
+    )
+    if (NOT (${IN_TREE_DIR} STREQUAL "IN_TREE_DIR-NOTFOUND"))
+        add_subdirectory(${DIR})
+        return()
+    endif()
+
+    find_path(OUT_TREE_DIR
+        NAMES .
+        PATHS ${CMAKE_SOURCE_DIR}/${DIR}
+            ${CMAKE_SOURCE_DIR}/../${DIR}
+            ${CMAKE_SOURCE_DIR}/../../${DIR}
+        NO_DEFAULT_PATH
+        NO_PACKAGE_ROOT_PATH
+        NO_CMAKE_PATH
+        NO_CMAKE_ENVIRONMENT_PATH
+        NO_SYSTEM_ENVIRONMENT_PATH
+        NO_CMAKE_SYSTEM_PATH
+        NO_CMAKE_INSTALL_PREFIX
+        REQUIRED
+    )
+    add_subdirectory(${OUT_TREE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/${DIR})
+
 endfunction()
