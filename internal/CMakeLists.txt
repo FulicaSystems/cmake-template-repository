@@ -29,7 +29,7 @@ target_include_directories(${component} PUBLIC "${CMAKE_CURRENT_LIST_DIR}/..")
 install(TARGETS ${component})
 # installing the include files
 install(
-    DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+    DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/
     TYPE INCLUDE
     FILES_MATCHING
     PATTERN *.h
