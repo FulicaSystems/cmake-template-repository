@@ -1,4 +1,6 @@
-# Dependency manager
+# Dependency Management Utils (DMU)
+#
+# CMake
 
 # make a dependency available for this cmake project
 function(depends)
@@ -20,6 +22,8 @@ function(depends)
         FETCH
 
         # add_subdirectory
+        # the subdirectory can either be a git submodule, a sub folder or a completely external folder
+        # according to the CMake documentation, the external folder needs a build directory specified
         SUBDIRECTORY
         SUBMODULE
 
@@ -94,6 +98,8 @@ function(depends)
     endif()
 endfunction()
 
+
+
 # package based external dependency
 # should include a *Config.cmake or *-config.cmake file
 #
@@ -113,12 +119,15 @@ function(depends_package
     endif()
 
     if (NOT FROM_SOURCE)
+        # if FROM_SOURCE is not specified, the dependency is mostly likely installed or
+        # near the default paths (environment PATH, CMake paths, ...)
+
         set(SOURCE_DIR ${CONFIG_NAME})
         message("\nLooking for ${CONFIG_NAME} in default PATHs...")
 
-        find_package(${CONFIG_NAME} ${PACKAGE_VERSION} REQUIRED NO_MODULE GLOBAL)
-
     else()
+        # find the dependency sources near the current CMakeLists.txt
+
         message("\nLooking for ${SOURCE_DIR} near ${CMAKE_SOURCE_DIR}...")
         find_path(${SOURCE_DIR}-DIR
             NAMES .
@@ -138,6 +147,8 @@ function(depends_package
         message("${SOURCE_DIR}-DIR : ${${SOURCE_DIR}-DIR}")
         message("${SOURCE_DIR} was found : ${${SOURCE_DIR}-DIR}")
 
+
+        # find a CMake config file in order to use find_package in package mode instead of module
 
         file(GLOB_RECURSE CONFIG_FILES
             "${${SOURCE_DIR}-DIR}/**/${CONFIG_NAME}Config.cmake"
@@ -196,9 +207,16 @@ function(depends_package
 
 endfunction()
 
+
+
+
 # module based external dependency
 function(depends_module)
+    # TODO
 endfunction()
+
+
+
 
 # precompiled library
 # default to STATIC
@@ -217,6 +235,7 @@ function(depends_precompiled
         set(DYNLIB_EXTENSION "dll")
     else()
         message(FATAL_ERROR "No other platforms supported yet")
+        # TODO
     endif()
 
     list(LENGTH LIB_FILES LIB_FILES_LENGTH)
@@ -422,15 +441,28 @@ function(depends_precompiled
 
 endfunction()
 
+
+
+
 # header only library
 function(depends_headeronly)
+    # TODO
 endfunction()
+
+
+
 
 function(depends_fetch DL_URL GIT_URL)
     message("Cloning from ${GIT_URL}...")
+    # TODO
 endfunction()
 
+
+
+
 function(depends_subdirectory DIR)
+
+    # if DIR is not a subfolder, add an external subdirectory
 
     find_path(IN_TREE_DIR
         NAMES .
@@ -449,6 +481,7 @@ function(depends_subdirectory DIR)
         return()
     endif()
 
+    # https://cmake.org/cmake/help/latest/command/add_subdirectory.html
     find_path(OUT_TREE_DIR
         NAMES .
         PATHS ${CMAKE_SOURCE_DIR}/${DIR}

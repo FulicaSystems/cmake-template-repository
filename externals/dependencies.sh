@@ -1,4 +1,5 @@
-# Dependency Management Utils
+# Bash Dependency Management Utils (shDMU)
+#
 # This manager is based on the bash scripting language
 # ideed it is the most agnosting language
 # to be used with pair with a futur bash build system
