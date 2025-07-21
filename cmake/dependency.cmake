@@ -238,6 +238,8 @@ function(depends_precompiled
         # TODO
     endif()
 
+    # extract variables from arguments
+
     list(LENGTH LIB_FILES LIB_FILES_LENGTH)
     list(LENGTH FOLDER_NAMES FOLDER_NAMES_LENGTH)
     if (${LIB_FILES_LENGTH} GREATER 0)
@@ -253,8 +255,13 @@ function(depends_precompiled
         message(FATAL_ERROR "At least one directory or file name must be specified")
     endif()
 
+
+    # find the library folder
+
     cmake_path(IS_ABSOLUTE FOLDER_NAME IS_ABS)
     if (FOLDER_NAMES_LENGTH GREATER 0 AND ${IS_ABS})
+        # if only one directory is specified with the DIRECTORIES keyword
+        # the static and dynamic libraries must be in the same folder
         message("\nLooking for ${LIB_FILE} in ${FOLDER_NAME}...")
         cmake_path(CONVERT "${FOLDER_NAME}" TO_CMAKE_PATH_LIST FOLDER_NAME NORMALIZE)
         find_path(${FOLDER_NAME}-DIR
@@ -270,6 +277,7 @@ function(depends_precompiled
             REQUIRED
         )
     elseif(FOLDER_NAMES_LENGTH GREATER 0)
+        # static and dynamic libraries path are specified
         message("\nLooking for ${LIB_FILE} near ${CMAKE_SOURCE_DIR}...")
         find_path(${FOLDER_NAME}-DIR
             NAMES .
@@ -287,6 +295,7 @@ function(depends_precompiled
             REQUIRED
         )
     else()
+        # in case the library has been installed, it can be found in the CMake default paths
         message("\nLooking for ${LIB_FILE} in default and cmake paths...")
         set(FOLDER_NAME ${TARGET_NAME})
         find_path(${FOLDER_NAME}-DIR
@@ -314,6 +323,8 @@ function(depends_precompiled
         LINKER_LANGUAGE CXX
     )
 
+    # include paths can be specified if the headers are somewhat hidden
+
     if (INCLUDE_PATHS)
         target_include_directories(${TARGET_NAME} INTERFACE ${INCLUDE_PATHS})
     else()
@@ -324,6 +335,8 @@ function(depends_precompiled
         target_link_directories(${TARGET_NAME} INTERFACE ${${FOLDER_NAME}-DIR})
     endif()
 
+
+    # find the static library file in Debug configuration (take one among a list if multiple libraries have been found)
 
     file(GLOB_RECURSE LIBD_NAMES "${${FOLDER_NAME}-DIR}/${LIB_FILE}${DEBUG_SUFFIX}.${IMPLIB_EXTENSION}")
     if (NOT LIBD_NAMES)
@@ -345,6 +358,8 @@ function(depends_precompiled
     target_link_directories(${TARGET_NAME} INTERFACE ${LIBD_PATH})
 
 
+    # find the static library file in Release configuration (take on among a list if multiple libraries have been found)
+
     file(GLOB_RECURSE LIB_NAMES "${${FOLDER_NAME}-DIR}/${LIB_FILE}.${IMPLIB_EXTENSION}")
     if (NOT LIB_NAMES)
         file(GLOB_RECURSE LIB_NAMES "${${FOLDER_NAME}-DIR}/**/${LIB_FILE}.${IMPLIB_EXTENSION}")
@@ -365,7 +380,8 @@ function(depends_precompiled
     target_link_directories(${TARGET_NAME} INTERFACE ${LIB_PATH})
 
     
-        
+    # see the documentation for imported libraries
+    # https://cmake.org/cmake/help/latest/command/add_library.html#imported-libraries
     if (NOT ${SHARED})
         message("Found static Debug library : ${LIBD_NAME}")
         message("Found static library : ${LIB_NAME}")
@@ -395,6 +411,8 @@ function(depends_precompiled
                 configure_file(${SHARED_FOLDER_NAME}/${SHARED_LIB_FILE}.${DYNLIB_EXTENSION} ${CMAKE_BINARY_DIR}/${SHARED_LIB_FILE}.${DYNLIB_EXTENSION} COPYONLY)
             endif()
         else()
+            # find the dynamic library file in Debug configuration (take on among a list if multiple libraries have been found)
+
             file(GLOB_RECURSE SHARED_LIBD_NAMES "${${FOLDER_NAME}-DIR}/**/${LIB_FILE}${DEBUG_SUFFIX}.${DYNLIB_EXTENSION}")
             if (NOT SHARED_LIBD_NAMES)
                 message(FATAL_ERROR "Failed to find ${LIB_FILE}${DEBUG_SUFFIX}.${DYNLIB_EXTENSION} in ${${FOLDER_NAME}-DIR}")
@@ -409,6 +427,8 @@ function(depends_precompiled
             message("Using : ${SHARED_LIBD_NAME}")
 
 
+            # find the dynamic library file in Release configuration (take on among a list if multiple libraries have been found)
+
             file(GLOB_RECURSE SHARED_LIB_NAMES "${${FOLDER_NAME}-DIR}/**/${LIB_FILE}.${DYNLIB_EXTENSION}")
             if (NOT SHARED_LIB_NAMES)
                 message(FATAL_ERROR "Failed to find ${LIB_FILE}.${DYNLIB_EXTENSION} in ${${FOLDER_NAME}-DIR}")
@@ -422,12 +442,14 @@ function(depends_precompiled
             list(GET SHARED_LIB_NAMES 0 SHARED_LIB_NAME)
             message("Using : ${SHARED_LIB_NAME}")
 
+            # only the dynamic library in Release configuration will be configured
             if (CONFIGURE_DEPENDS)
                 configure_file(${SHARED_LIB_NAME} ${CMAKE_BINARY_DIR}/${LIB_FILE}.${DYNLIB_EXTENSION} COPYONLY)
             endif()
 
         endif()
         
+        # only the dynamic library in Release configuration will be installed
         install(FILES ${LIB_FILE}.${DYNLIB_EXTENSION} TYPE BIN)
 
     endif()

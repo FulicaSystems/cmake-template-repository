@@ -9,6 +9,8 @@ set(PROJECT_NAME project_name)
 # initiating project given its name
 project(${PROJECT_NAME})
 
+include(cmake/dependency.cmake)
+
 add_subdirectory(externals)
 add_subdirectory(internal)
 add_subdirectory(lib)
