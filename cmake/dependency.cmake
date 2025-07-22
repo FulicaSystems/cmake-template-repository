@@ -128,24 +128,30 @@ function(depends_package
     else()
         # find the dependency sources near the current CMakeLists.txt
 
-        message("\nLooking for ${SOURCE_DIR} near ${CMAKE_SOURCE_DIR}...")
-        find_path(${SOURCE_DIR}-DIR
-            NAMES .
-            PATHS ${CMAKE_CURRENT_LIST_DIR}/${SOURCE_DIR}
-                ${CMAKE_SOURCE_DIR}/${SOURCE_DIR}
-                ${CMAKE_SOURCE_DIR}/../${SOURCE_DIR}
-                ${CMAKE_SOURCE_DIR}/../../${SOURCE_DIR}
-            NO_DEFAULT_PATH
-            NO_PACKAGE_ROOT_PATH
-            NO_CMAKE_PATH
-            NO_CMAKE_ENVIRONMENT_PATH
-            NO_SYSTEM_ENVIRONMENT_PATH
-            NO_CMAKE_SYSTEM_PATH
-            NO_CMAKE_INSTALL_PREFIX
-            REQUIRED
-        )
-        message("${SOURCE_DIR}-DIR : ${${SOURCE_DIR}-DIR}")
-        message("${SOURCE_DIR} was found : ${${SOURCE_DIR}-DIR}")
+        cmake_path(IS_ABSOLUTE SOURCE_DIR IS_ABS)
+        if (NOT ${IS_ABS})
+            message("\nLooking for ${SOURCE_DIR} near ${CMAKE_SOURCE_DIR}...")
+            find_path(${SOURCE_DIR}-DIR
+                NAMES .
+                PATHS ${CMAKE_CURRENT_LIST_DIR}/${SOURCE_DIR}
+                    ${CMAKE_SOURCE_DIR}/${SOURCE_DIR}
+                    ${CMAKE_SOURCE_DIR}/../${SOURCE_DIR}
+                    ${CMAKE_SOURCE_DIR}/../../${SOURCE_DIR}
+                NO_DEFAULT_PATH
+                NO_PACKAGE_ROOT_PATH
+                NO_CMAKE_PATH
+                NO_CMAKE_ENVIRONMENT_PATH
+                NO_SYSTEM_ENVIRONMENT_PATH
+                NO_CMAKE_SYSTEM_PATH
+                NO_CMAKE_INSTALL_PREFIX
+                REQUIRED
+            )
+            message("${SOURCE_DIR} was found : ${${SOURCE_DIR}-DIR}")
+        else()
+            message("\nLooking for ${CONFIG_NAME} in ${SOURCE_DIR}...")
+            set(${SOURCE_DIR}-DIR ${SOURCE_DIR})
+            message("${SOURCE_DIR} is absolute : ${${SOURCE_DIR}-DIR}")
+        endif()
 
 
         # find a CMake config file in order to use find_package in package mode instead of module
@@ -326,10 +332,17 @@ function(depends_precompiled
     # include paths can be specified if the headers are somewhat hidden
 
     if (INCLUDE_PATHS)
-        target_include_directories(${TARGET_NAME} INTERFACE ${INCLUDE_PATHS})
+        cmake_path(IS_ABSOLUTE INCLUDE_PATHS IS_ABS)
+        if (${IS_ABS})
+            target_include_directories(${TARGET_NAME} INTERFACE ${INCLUDE_PATHS})
+        else()
+            target_include_directories(${TARGET_NAME} INTERFACE ${${FOLDER_NAME}-DIR}/${INCLUDE_PATHS})
+        endif()
     else()
         target_include_directories(${TARGET_NAME} INTERFACE ${${FOLDER_NAME}-DIR})
     endif()
+    get_target_property(SHOW_INCLUDE_PATHS ${TARGET_NAME} INTERFACE_INCLUDE_DIRECTORIES)
+    message("${TARGET_NAME} include directories : ${SHOW_INCLUDE_PATHS}")
 
     if (NOT CONFIGURE_DEPENDS)
         target_link_directories(${TARGET_NAME} INTERFACE ${${FOLDER_NAME}-DIR})
@@ -413,7 +426,10 @@ function(depends_precompiled
         else()
             # find the dynamic library file in Debug configuration (take on among a list if multiple libraries have been found)
 
-            file(GLOB_RECURSE SHARED_LIBD_NAMES "${${FOLDER_NAME}-DIR}/**/${LIB_FILE}${DEBUG_SUFFIX}.${DYNLIB_EXTENSION}")
+            file(GLOB_RECURSE SHARED_LIBD_NAMES "${${FOLDER_NAME}-DIR}/${LIB_FILE}${DEBUG_SUFFIX}.${DYNLIB_EXTENSION}")
+            if (NOT SHARED_LIBD_NAMES)
+                file(GLOB_RECURSE SHARED_LIBD_NAMES "${${FOLDER_NAME}-DIR}/**/${LIB_FILE}${DEBUG_SUFFIX}.${DYNLIB_EXTENSION}")
+            endif()
             if (NOT SHARED_LIBD_NAMES)
                 message(FATAL_ERROR "Failed to find ${LIB_FILE}${DEBUG_SUFFIX}.${DYNLIB_EXTENSION} in ${${FOLDER_NAME}-DIR}")
             endif()
@@ -429,7 +445,10 @@ function(depends_precompiled
 
             # find the dynamic library file in Release configuration (take on among a list if multiple libraries have been found)
 
-            file(GLOB_RECURSE SHARED_LIB_NAMES "${${FOLDER_NAME}-DIR}/**/${LIB_FILE}.${DYNLIB_EXTENSION}")
+            file(GLOB_RECURSE SHARED_LIB_NAMES "${${FOLDER_NAME}-DIR}/${LIB_FILE}.${DYNLIB_EXTENSION}")
+            if (NOT SHARED_LIB_NAMES)
+                file(GLOB_RECURSE SHARED_LIB_NAMES "${${FOLDER_NAME}-DIR}/**/${LIB_FILE}.${DYNLIB_EXTENSION}")
+            endif()
             if (NOT SHARED_LIB_NAMES)
                 message(FATAL_ERROR "Failed to find ${LIB_FILE}.${DYNLIB_EXTENSION} in ${${FOLDER_NAME}-DIR}")
             endif()
