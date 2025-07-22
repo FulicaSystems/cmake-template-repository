@@ -59,6 +59,8 @@ function(depends)
         FILES
         # include directories
         INCLUDE_PATHS
+        # optional components
+        COMPONENTS
     )
     cmake_parse_arguments(arg_depends
         "${options}"
@@ -73,6 +75,7 @@ function(depends)
             "${arg_depends_CONFIG}"
             "${arg_depends_VERSION}"
             "${arg_depends_INCLUDE_PATHS}"
+            "${arg_depends_COMPONENTS}"
         )
     elseif (${arg_depends_MODULE})
         depends_module()
@@ -111,6 +114,7 @@ function(depends_package
     CONFIG_NAME
     PACKAGE_VERSION
     INCLUDE_PATHS
+    COMPONENTS
 )
     string(TOLOWER ${CONFIG_NAME} CONFIG_NAME_LOWER)
 
@@ -177,7 +181,16 @@ function(depends_package
 
     endif()
     
-    find_package(${CONFIG_NAME} ${PACKAGE_VERSION} REQUIRED NO_MODULE GLOBAL)
+    if (COMPONENTS)
+        find_package(${CONFIG_NAME} ${PACKAGE_VERSION} COMPONENTS ${COMPONENTS} REQUIRED NO_MODULE GLOBAL)
+        set(${CONFIG_NAME}-COMPLETE)
+        foreach(COMP IN LISTS COMPONENTS)
+            list(APPEND ${CONFIG_NAME}-COMPLETE "${CONFIG_NAME}::${COMP}")
+        endforeach()
+        message("The target ${CONFIG_NAME}-COMPLETE can be used to link all the components at once")
+    else()
+        find_package(${CONFIG_NAME} ${PACKAGE_VERSION} REQUIRED NO_MODULE GLOBAL)
+    endif()
     
     message("${CONFIG_NAME} is ready to link : see ${SOURCE_DIR} documentation to get the target name\n")
     
