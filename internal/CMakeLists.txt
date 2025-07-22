@@ -3,6 +3,7 @@ set(component internal)
 add_library(${component} STATIC "")
 add_library(MyComponentAlias ALIAS ${component})
 
+# public headers will be installed with the target
 set_property(TARGET ${component}
     PROPERTY PUBLIC_HEADER
     # add public headers here
