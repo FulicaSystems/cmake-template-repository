@@ -187,7 +187,7 @@ function(depends_package
         foreach(COMP IN LISTS COMPONENTS)
             list(APPEND ${CONFIG_NAME}-COMPLETE "${CONFIG_NAME}::${COMP}")
         endforeach()
-        message("The target ${CONFIG_NAME}-COMPLETE can be used to link all the components at once")
+        message("The variable ${CONFIG_NAME}-COMPLETE can be used to link all the components at once")
     else()
         find_package(${CONFIG_NAME} ${PACKAGE_VERSION} REQUIRED NO_MODULE GLOBAL)
     endif()
