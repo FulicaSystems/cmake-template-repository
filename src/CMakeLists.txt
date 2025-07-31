@@ -1,5 +1,10 @@
 set(component src)
 
+configure_file(directories.hpp.in ${CMAKE_BINARY_DIR}/directories.hpp @ONLY)
+# configure_file(resource_bank.hpp.in ${CMAKE_BINARY_DIR}/resource_bank.hpp @ONLY)
+# configure_file(asset_bank.hpp.in ${CMAKE_BINARY_DIR}/asset_bank.hpp @ONLY)
+# configure_file(media_bank.hpp.in ${CMAKE_BINARY_DIR}/media_bank.hpp @ONLY)
+
 add_executable(${component})
 
 target_sources(${component}
