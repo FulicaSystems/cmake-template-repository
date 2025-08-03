@@ -61,6 +61,8 @@ function(depends)
         INCLUDE_PATHS
         # optional components
         COMPONENTS
+        # optional additional dependencies
+        ADDITIONAL_DEPENDENCIES
     )
     cmake_parse_arguments(arg_depends
         "${options}"
@@ -71,10 +73,11 @@ function(depends)
 
     if (${arg_depends_PACKAGE})
         depends_package("${arg_depends_FROM_SOURCE}"
+            "${arg_depends_SHARED}"
+            "${arg_depends_CONFIGURE_DEPENDS}"
             "${arg_depends_DIRECTORY}"
             "${arg_depends_CONFIG}"
             "${arg_depends_VERSION}"
-            "${arg_depends_INCLUDE_PATHS}"
             "${arg_depends_COMPONENTS}"
         )
     elseif (${arg_depends_MODULE})
@@ -87,6 +90,7 @@ function(depends)
             "${arg_depends_FILES}"
             "${arg_depends_DEBUG_SUFFIX}"
             "${arg_depends_INCLUDE_PATHS}"
+            "${arg_depends_ADDITIONAL_DEPENDENCIES}"
         )
     elseif (${arg_depends_HEADERONLY})
         depends_headeronly()
@@ -110,10 +114,11 @@ endfunction()
 # https://github.com/nvpro-samples/nvpro_core2
 function(depends_package
     FROM_SOURCE
+    SHARED
+    CONFIGURE_DEPENDS
     SOURCE_DIR
     CONFIG_NAME
     PACKAGE_VERSION
-    INCLUDE_PATHS
     COMPONENTS
 )
     string(TOLOWER ${CONFIG_NAME} CONFIG_NAME_LOWER)
@@ -225,6 +230,10 @@ function(depends_package
         endforeach()
     endif()
 
+    if (${CONFIGURE_DEPENDS} AND ${SHARED})
+        message("TODO : find all used dlls and configure to CMAKE_BINARY_DIR")
+    endif()
+
 endfunction()
 
 
@@ -249,6 +258,7 @@ function(depends_precompiled
     LIB_FILES
     DEBUG_SUFFIX
     INCLUDE_PATHS
+    ADDITIONAL_DEPENDENCIES
 )
     if (WIN32)
         set(IMPLIB_EXTENSION "lib")
@@ -439,6 +449,9 @@ function(depends_precompiled
             if (CONFIGURE_DEPENDS)
                 configure_file(${SHARED_FOLDER_NAME}/${SHARED_LIB_FILE}.${DYNLIB_EXTENSION} ${CMAKE_BINARY_DIR}/${SHARED_LIB_FILE}.${DYNLIB_EXTENSION} COPYONLY)
             endif()
+            if (ADDITIONAL_DEPENDENCIES)
+                message("TODO : configure additional dependencies")
+            endif()
         else()
             # find the dynamic library file in Debug configuration (take on among a list if multiple libraries have been found)
 
@@ -480,6 +493,9 @@ function(depends_precompiled
             # only the dynamic library in Release configuration will be configured
             if (CONFIGURE_DEPENDS)
                 configure_file(${SHARED_LIB_NAME} ${CMAKE_BINARY_DIR}/${LIB_FILE}.${DYNLIB_EXTENSION} COPYONLY)
+            endif()
+            if (ADDITIONAL_DEPENDENCIES)
+                message("TODO : configure additional dependencies")
             endif()
 
         endif()
