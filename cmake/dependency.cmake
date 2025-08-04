@@ -452,6 +452,10 @@ function(depends_precompiled
             if (ADDITIONAL_DEPENDENCIES)
                 message("TODO : configure additional dependencies")
             endif()
+
+            # TODO : fix install
+            install(FILES ${LIB_FILE}.${DYNLIB_EXTENSION} TYPE BIN)
+
         else()
             # find the dynamic library file in Debug configuration (take on among a list if multiple libraries have been found)
 
@@ -498,11 +502,10 @@ function(depends_precompiled
                 message("TODO : configure additional dependencies")
             endif()
 
+            install(FILES ${LIB_FILE}.${DYNLIB_EXTENSION} TYPE BIN)
+
         endif()
         
-        # only the dynamic library in Release configuration will be installed
-        install(FILES ${LIB_FILE}.${DYNLIB_EXTENSION} TYPE BIN)
-
     endif()
 
     set_target_properties(${TARGET_NAME} PROPERTIES
