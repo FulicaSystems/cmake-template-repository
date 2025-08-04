@@ -41,6 +41,10 @@ function(depends)
         # package required version
         VERSION
 
+        # name of the package target specified by the author of the package
+        # it will be used to gather dynamic libraries used by the dependency
+        AUTHOR_TARGET
+
         # generated target name
         OUTPUT_TARGET
         # libraries debug suffix (*d.lib)
@@ -79,6 +83,8 @@ function(depends)
             "${arg_depends_CONFIG}"
             "${arg_depends_VERSION}"
             "${arg_depends_COMPONENTS}"
+            "${arg_depends_ADDITIONAL_DEPENDENCIES}"
+            "${arg_depends_AUTHOR_TARGET}"
         )
     elseif (${arg_depends_MODULE})
         depends_module()
@@ -120,6 +126,8 @@ function(depends_package
     CONFIG_NAME
     PACKAGE_VERSION
     COMPONENTS
+    ADDITIONAL_DEPENDENCIES
+    AUTHOR_TARGET
 )
     string(TOLOWER ${CONFIG_NAME} CONFIG_NAME_LOWER)
 
@@ -232,6 +240,24 @@ function(depends_package
 
     if (${CONFIGURE_DEPENDS} AND ${SHARED})
         message("TODO : find all used dlls and configure to CMAKE_BINARY_DIR")
+    endif()
+
+
+    if (AUTHOR_TARGET)
+        # https://stackoverflow.com/questions/76867453/cmake-how-to-copy-dll-after-find-package
+        if (SHARED)
+            # confirm that the package is a shared lib
+            get_target_property(LIB_TYPE ${AUTHOR_TARGET} TYPE)
+            if (LIB_TYPE STREQUAL "SHARED_LIBRARY")
+                get_filename_component(FILENAME $<TARGET_FILE:${AUTHOR_TARGET}> NAME)
+                configure_file($<TARGET_FILE:${AUTHOR_TARGET}> ${CMAKE_BINARY_DIR}/${FILENAME} COPYONLY)
+            endif()
+            
+            foreach (ADD_LIB IN LISTS ADDITIONAL_DEPENDENCIES)
+                get_filename_component(LIB_DIR $<TARGET_FILE:${AUTHOR_TARGET}> DIRECTORY)
+                configure_file(${LIB_DIR}/${ADD_LIB} ${CMAKE_BINARY_DIR}/${ADD_LIB} COPYONLY)
+            endforeach()
+        endif()
     endif()
 
 endfunction()
@@ -453,8 +479,7 @@ function(depends_precompiled
                 message("TODO : configure additional dependencies")
             endif()
 
-            # TODO : fix install
-            install(FILES ${LIB_FILE}.${DYNLIB_EXTENSION} TYPE BIN)
+            install(FILES ${SHARED_FOLDER_NAME}/${SHARED_LIB_FILE}.${DYNLIB_EXTENSION} TYPE BIN)
 
         else()
             # find the dynamic library file in Debug configuration (take on among a list if multiple libraries have been found)
@@ -502,7 +527,7 @@ function(depends_precompiled
                 message("TODO : configure additional dependencies")
             endif()
 
-            install(FILES ${LIB_FILE}.${DYNLIB_EXTENSION} TYPE BIN)
+            install(FILES ${SHARED_LIB_NAME} TYPE BIN)
 
         endif()
         
