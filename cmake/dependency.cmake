@@ -238,10 +238,6 @@ function(depends_package
         endforeach()
     endif()
 
-    if (${CONFIGURE_DEPENDS} AND ${SHARED})
-        message("TODO : find all used dlls and configure to CMAKE_BINARY_DIR")
-    endif()
-
 
     if (AUTHOR_TARGET)
         # https://stackoverflow.com/questions/76867453/cmake-how-to-copy-dll-after-find-package
@@ -252,7 +248,7 @@ function(depends_package
                 get_filename_component(FILENAME $<TARGET_FILE:${AUTHOR_TARGET}> NAME)
                 configure_file($<TARGET_FILE:${AUTHOR_TARGET}> ${CMAKE_BINARY_DIR}/${FILENAME} COPYONLY)
             endif()
-            
+
             foreach (ADD_LIB IN LISTS ADDITIONAL_DEPENDENCIES)
                 get_filename_component(LIB_DIR $<TARGET_FILE:${AUTHOR_TARGET}> DIRECTORY)
                 configure_file(${LIB_DIR}/${ADD_LIB} ${CMAKE_BINARY_DIR}/${ADD_LIB} COPYONLY)
@@ -475,9 +471,11 @@ function(depends_precompiled
             if (CONFIGURE_DEPENDS)
                 configure_file(${SHARED_FOLDER_NAME}/${SHARED_LIB_FILE}.${DYNLIB_EXTENSION} ${CMAKE_BINARY_DIR}/${SHARED_LIB_FILE}.${DYNLIB_EXTENSION} COPYONLY)
             endif()
-            if (ADDITIONAL_DEPENDENCIES)
-                message("TODO : configure additional dependencies")
-            endif()
+
+            foreach (ADD_LIB IN LISTS ADDITIONAL_DEPENDENCIES)
+                configure_file(${SHARED_FOLDER_NAME}/${ADD_LIB} ${CMAKE_BINARY_DIR}/${ADD_LIB} COPYONLY)
+                install(FILES ${SHARED_FOLDER_NAME}/${ADD_LIB} TYPE BIN)
+            endforeach()
 
             install(FILES ${SHARED_FOLDER_NAME}/${SHARED_LIB_FILE}.${DYNLIB_EXTENSION} TYPE BIN)
 
@@ -523,9 +521,12 @@ function(depends_precompiled
             if (CONFIGURE_DEPENDS)
                 configure_file(${SHARED_LIB_NAME} ${CMAKE_BINARY_DIR}/${LIB_FILE}.${DYNLIB_EXTENSION} COPYONLY)
             endif()
-            if (ADDITIONAL_DEPENDENCIES)
-                message("TODO : configure additional dependencies")
-            endif()
+
+            foreach (ADD_LIB IN LISTS ADDITIONAL_DEPENDENCIES)
+                get_filename_component(LIB_DIR SHARED_LIB_NAME DIRECTORY)
+                configure_file(${LIB_DIR}/${ADD_LIB} ${CMAKE_BINARY_DIR}/${ADD_LIB} COPYONLY)
+                install(FILES ${LIB_DIR}/${ADD_LIB} TYPE BIN)
+            endforeach()
 
             install(FILES ${SHARED_LIB_NAME} TYPE BIN)
 
