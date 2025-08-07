@@ -41,10 +41,6 @@ function(depends)
         # package required version
         VERSION
 
-        # name of the package target specified by the author of the package
-        # it will be used to gather dynamic libraries used by the dependency
-        AUTHOR_TARGET
-
         # generated target name
         OUTPUT_TARGET
         # libraries debug suffix (*d.lib)
@@ -67,6 +63,8 @@ function(depends)
         COMPONENTS
         # optional additional dependencies
         ADDITIONAL_DEPENDENCIES
+        # files to be copied (alias ADDITIONAL_DEPENDENCIES)
+        CONFIGURE_FILES
     )
     cmake_parse_arguments(arg_depends
         "${options}"
@@ -76,15 +74,13 @@ function(depends)
     )
 
     if (${arg_depends_PACKAGE})
+        list(APPEND ADDITIONAL_DEPENDENCIES ${CONFIGURE_FILES})
         depends_package("${arg_depends_FROM_SOURCE}"
-            "${arg_depends_SHARED}"
-            "${arg_depends_CONFIGURE_DEPENDS}"
             "${arg_depends_DIRECTORY}"
             "${arg_depends_CONFIG}"
             "${arg_depends_VERSION}"
             "${arg_depends_COMPONENTS}"
             "${arg_depends_ADDITIONAL_DEPENDENCIES}"
-            "${arg_depends_AUTHOR_TARGET}"
         )
     elseif (${arg_depends_MODULE})
         depends_module()
@@ -120,14 +116,11 @@ endfunction()
 # https://github.com/nvpro-samples/nvpro_core2
 function(depends_package
     FROM_SOURCE
-    SHARED
-    CONFIGURE_DEPENDS
     SOURCE_DIR
     CONFIG_NAME
     PACKAGE_VERSION
     COMPONENTS
     ADDITIONAL_DEPENDENCIES
-    AUTHOR_TARGET
 )
     string(TOLOWER ${CONFIG_NAME} CONFIG_NAME_LOWER)
 
@@ -238,23 +231,10 @@ function(depends_package
         endforeach()
     endif()
 
-
-    if (AUTHOR_TARGET)
-        # https://stackoverflow.com/questions/76867453/cmake-how-to-copy-dll-after-find-package
-        if (SHARED)
-            # confirm that the package is a shared lib
-            get_target_property(LIB_TYPE ${AUTHOR_TARGET} TYPE)
-            if (LIB_TYPE STREQUAL "SHARED_LIBRARY")
-                get_filename_component(FILENAME $<TARGET_FILE:${AUTHOR_TARGET}> NAME)
-                configure_file($<TARGET_FILE:${AUTHOR_TARGET}> ${CMAKE_BINARY_DIR}/${FILENAME} COPYONLY)
-            endif()
-
-            foreach (ADD_LIB IN LISTS ADDITIONAL_DEPENDENCIES)
-                get_filename_component(LIB_DIR $<TARGET_FILE:${AUTHOR_TARGET}> DIRECTORY)
-                configure_file(${LIB_DIR}/${ADD_LIB} ${CMAKE_BINARY_DIR}/${ADD_LIB} COPYONLY)
-            endforeach()
-        endif()
-    endif()
+    foreach (ADD_LIB IN LISTS ADDITIONAL_DEPENDENCIES)
+        file(GLOB_RECURSE LIB_PATH ${${SOURCE_DIR}-DIR}/${ADD_LIB})
+        configure_file(${LIB_PATH} ${CMAKE_BINARY_DIR}/${ADD_LIB} COPYONLY)
+    endforeach()
 
 endfunction()
 
