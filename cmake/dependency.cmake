@@ -74,7 +74,7 @@ function(depends)
     )
 
     if (${arg_depends_PACKAGE})
-        list(APPEND ADDITIONAL_DEPENDENCIES ${CONFIGURE_FILES})
+        list(APPEND arg_depends_ADDITIONAL_DEPENDENCIES ${arg_depends_CONFIGURE_FILES})
         depends_package("${arg_depends_FROM_SOURCE}"
             "${arg_depends_DIRECTORY}"
             "${arg_depends_CONFIG}"
