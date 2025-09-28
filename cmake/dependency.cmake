@@ -66,42 +66,44 @@ function(depends)
         # files to be copied (alias ADDITIONAL_DEPENDENCIES)
         CONFIGURE_FILES
     )
-    cmake_parse_arguments(arg_depends
+    cmake_parse_arguments(arg
         "${options}"
         "${keywords}"
         "${multikeywords}"
         ${ARGN}
     )
 
-    if (${arg_depends_PACKAGE})
-        list(APPEND arg_depends_ADDITIONAL_DEPENDENCIES ${arg_depends_CONFIGURE_FILES})
-        depends_package("${arg_depends_FROM_SOURCE}"
-            "${arg_depends_DIRECTORY}"
-            "${arg_depends_CONFIG}"
-            "${arg_depends_VERSION}"
-            "${arg_depends_COMPONENTS}"
-            "${arg_depends_ADDITIONAL_DEPENDENCIES}"
+    if (${arg_PACKAGE})
+        list(APPEND arg_ADDITIONAL_DEPENDENCIES ${arg_CONFIGURE_FILES})
+        depends_package("${arg_FROM_SOURCE}"
+            "${arg_DIRECTORY}"
+            "${arg_CONFIG}"
+            "${arg_VERSION}"
+            "${arg_COMPONENTS}"
+            "${arg_ADDITIONAL_DEPENDENCIES}"
         )
-    elseif (${arg_depends_MODULE})
+    elseif (${arg_MODULE})
         depends_module()
-    elseif (${arg_depends_PRECOMPILED})
-        depends_precompiled("${arg_depends_SHARED}"
-            "${arg_depends_CONFIGURE_DEPENDS}"
-            "${arg_depends_OUTPUT_TARGET}"
-            "${arg_depends_DIRECTORIES}"
-            "${arg_depends_FILES}"
-            "${arg_depends_DEBUG_SUFFIX}"
-            "${arg_depends_INCLUDE_PATHS}"
-            "${arg_depends_ADDITIONAL_DEPENDENCIES}"
+    elseif (${arg_PRECOMPILED})
+        depends_precompiled("${arg_SHARED}"
+            "${arg_CONFIGURE_DEPENDS}"
+            "${arg_OUTPUT_TARGET}"
+            "${arg_DIRECTORIES}"
+            "${arg_FILES}"
+            "${arg_DEBUG_SUFFIX}"
+            "${arg_INCLUDE_PATHS}"
+            "${arg_ADDITIONAL_DEPENDENCIES}"
         )
-    elseif (${arg_depends_HEADERONLY})
-        depends_headeronly()
-    elseif (${arg_depends_FETCH})
-        depends_fetch("${arg_depends_DL_URL}" "${arg_depends_GIT_URL}")
-    elseif (${arg_depends_SUBDIRECTORY})
-        depends_subdirectory("${arg_depends_DIRECTORY}")
-    elseif (${arg_depends_SUBMODULE})
-        depends_subdirectory("${arg_depends_DIRECTORY}")
+    elseif (${arg_HEADERONLY})
+        depends_headeronly("${arg_DIRECTORY}"
+            "${arg_OUTPUT_TARGET}"
+        )
+    elseif (${arg_FETCH})
+        depends_fetch("${arg_DL_URL}" "${arg_GIT_URL}")
+    elseif (${arg_SUBDIRECTORY})
+        depends_subdirectory("${arg_DIRECTORY}")
+    elseif (${arg_SUBMODULE})
+        depends_subdirectory("${arg_DIRECTORY}")
     else()
         message(FATAL_ERROR "A dependency type must be specified")
     endif()
@@ -262,16 +264,7 @@ function(depends_precompiled
     INCLUDE_PATHS
     ADDITIONAL_DEPENDENCIES
 )
-    if (WIN32)
-        set(IMPLIB_EXTENSION "lib")
-        set(DYNLIB_EXTENSION "dll")
-    else()
-        message(FATAL_ERROR "No other platforms supported yet")
-        # TODO
-    endif()
-
     # extract variables from arguments
-
     list(LENGTH LIB_FILES LIB_FILES_LENGTH)
     list(LENGTH FOLDER_NAMES FOLDER_NAMES_LENGTH)
     if (${LIB_FILES_LENGTH} GREATER 0)
@@ -290,51 +283,7 @@ function(depends_precompiled
 
     # find the library folder
 
-    cmake_path(IS_ABSOLUTE FOLDER_NAME IS_ABS)
-    if (FOLDER_NAMES_LENGTH GREATER 0 AND ${IS_ABS})
-        # if only one directory is specified with the DIRECTORIES keyword
-        # the static and dynamic libraries must be in the same folder
-        message("\nLooking for ${LIB_FILE} in ${FOLDER_NAME}...")
-        cmake_path(CONVERT "${FOLDER_NAME}" TO_CMAKE_PATH_LIST FOLDER_NAME NORMALIZE)
-        find_path(${FOLDER_NAME}-DIR
-            NAMES .
-            PATHS ${FOLDER_NAME}
-            NO_DEFAULT_PATH
-            NO_PACKAGE_ROOT_PATH
-            NO_CMAKE_PATH
-            NO_CMAKE_ENVIRONMENT_PATH
-            NO_SYSTEM_ENVIRONMENT_PATH
-            NO_CMAKE_SYSTEM_PATH
-            NO_CMAKE_INSTALL_PREFIX
-            REQUIRED
-        )
-    elseif(FOLDER_NAMES_LENGTH GREATER 0)
-        # static and dynamic libraries path are specified
-        message("\nLooking for ${LIB_FILE} near ${CMAKE_SOURCE_DIR}...")
-        find_path(${FOLDER_NAME}-DIR
-            NAMES .
-            PATHS ${CMAKE_CURRENT_LIST_DIR}/${FOLDER_NAME}
-                ${CMAKE_SOURCE_DIR}/${FOLDER_NAME}
-                ${CMAKE_SOURCE_DIR}/../${FOLDER_NAME}
-                ${CMAKE_SOURCE_DIR}/../../${FOLDER_NAME}
-            NO_DEFAULT_PATH
-            NO_PACKAGE_ROOT_PATH
-            NO_CMAKE_PATH
-            NO_CMAKE_ENVIRONMENT_PATH
-            NO_SYSTEM_ENVIRONMENT_PATH
-            NO_CMAKE_SYSTEM_PATH
-            NO_CMAKE_INSTALL_PREFIX
-            REQUIRED
-        )
-    else()
-        # in case the library has been installed, it can be found in the CMake default paths
-        message("\nLooking for ${LIB_FILE} in default and cmake paths...")
-        set(FOLDER_NAME ${TARGET_NAME})
-        find_path(${FOLDER_NAME}-DIR
-            NAMES ${LIB_FILE}.${IMPLIB_EXTENSION}
-            REQUIRED
-        )
-    endif()
+    find_lib_directory(${FOLDER_NAME})
 
     message("${FOLDER_NAME}-DIR : ${${FOLDER_NAME}-DIR}")
 
@@ -525,12 +474,16 @@ endfunction()
 
 
 
-
 # header only library
-function(depends_headeronly)
-    # TODO
-endfunction()
+function(depends_headeronly DIRECTORY OUTPUT_TARGET)
+    find_lib_directory(${DIRECTORY} REQUIRED)
 
+    # only header files, no source files
+    add_library(${OUTPUT_TARGET} INTERFACE)
+    target_include_directories(${OUTPUT_TARGET} INTERFACE ${${DIRECTORY}-DIR})
+
+    message("${${DIRECTORY}-DIR} is ready to be linked as ${OUTPUT_TARGET}\n")
+endfunction()
 
 
 
@@ -538,7 +491,6 @@ function(depends_fetch DL_URL GIT_URL)
     message("Cloning from ${GIT_URL}...")
     # TODO
 endfunction()
-
 
 
 
@@ -581,3 +533,81 @@ function(depends_subdirectory DIR)
     add_subdirectory(${OUT_TREE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/${DIR})
 
 endfunction()
+
+
+
+
+function(find_lib_directory LIB_NAME)
+    set(options REQUIRED OPTIONAL)
+    set(keywords)
+    set(multikeywords)
+    cmake_parse_arguments(arg "${options}" "${keywords}" "${multikeywords}")
+
+    # LIB_NAME is considered to be the name of the folder containing the said library
+    set(FOLDER_NAME ${LIB_NAME})
+
+    cmake_path(IS_ABSOLUTE FOLDER_NAME IS_ABS)
+
+    # look for the directory in the absolute path
+    if (${IS_ABS})
+        message("\nLooking for ${LIB_NAME} in ${FOLDER_NAME}...")
+        cmake_path(CONVERT "${FOLDER_NAME}" TO_CMAKE_PATH_LIST FOLDER_NAME NORMALIZE)
+        find_path(${FOLDER_NAME}-DIR
+            NAMES .
+            PATHS ${FOLDER_NAME}
+            NO_DEFAULT_PATH
+            NO_PACKAGE_ROOT_PATH
+            NO_CMAKE_PATH
+            NO_CMAKE_ENVIRONMENT_PATH
+            NO_SYSTEM_ENVIRONMENT_PATH
+            NO_CMAKE_SYSTEM_PATH
+            NO_CMAKE_INSTALL_PREFIX
+            arg_REQUIRED
+        )
+    # look near the current top level workspace directory
+    else()
+        message("\nLooking for ${FOLDER_NAME} near ${CMAKE_SOURCE_DIR}...")
+        find_path(${FOLDER_NAME}-DIR
+            NAMES .
+            PATHS ${CMAKE_CURRENT_LIST_DIR}/${FOLDER_NAME}
+                ${CMAKE_SOURCE_DIR}/${FOLDER_NAME}
+                ${CMAKE_SOURCE_DIR}/../${FOLDER_NAME}
+                ${CMAKE_SOURCE_DIR}/../../${FOLDER_NAME}
+            NO_DEFAULT_PATH
+            NO_PACKAGE_ROOT_PATH
+            NO_CMAKE_PATH
+            NO_CMAKE_ENVIRONMENT_PATH
+            NO_SYSTEM_ENVIRONMENT_PATH
+            NO_CMAKE_SYSTEM_PATH
+            NO_CMAKE_INSTALL_PREFIX
+            arg_REQUIRED
+        )
+    endif()
+        
+    # in case the library has been installed, it can be found in the CMake default paths
+    if (${${FOLDER_NAME}-DIR} STREQUAL "${FOLDER_NAME}-DIR-NOTFOUND")
+        message("\nLooking for ${FOLDER_NAME} in default and cmake paths...")
+        set(FOLDER_NAME ${TARGET_NAME})
+        find_path(${FOLDER_NAME}-DIR
+            NAMES ${FOLDER_NAME}
+            arg_REQUIRED
+        )
+    endif()
+
+    if ((${${FOLDER_NAME}-DIR} STREQUAL "${FOLDER_NAME}-DIR-NOTFOUND") AND arg_REQUIRED)
+        message(FATAL_ERROR "Could not find the specified library")
+    endif()
+    
+    set(${FOLDER_NAME}-DIR ${${FOLDER_NAME}-DIR} PARENT_SCOPE)
+
+endfunction()
+
+
+
+if (WIN32)
+    set(IMPLIB_EXTENSION "lib")
+    set(DYNLIB_EXTENSION "dll")
+else()
+    message(FATAL_ERROR "No other platforms supported yet")
+    # TODO
+endif()
