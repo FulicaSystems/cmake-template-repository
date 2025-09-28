@@ -476,6 +476,12 @@ endfunction()
 
 # header only library
 function(depends_headeronly DIRECTORY OUTPUT_TARGET)
+    # do nothing if target already exists
+    if (TARGET ${OUTPUT_TARGET})
+        message("${OUTPUT_TARGET} already exists and is ready to link\n")
+        return()
+    endif()
+
     find_lib_directory(${DIRECTORY} REQUIRED)
 
     # only header files, no source files
