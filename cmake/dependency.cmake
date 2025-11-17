@@ -185,7 +185,8 @@ function(depends_package
 
 
         cmake_path(REMOVE_FILENAME CONFIG_FILE OUTPUT_VARIABLE CONFIG_PATH)
-        list(APPEND CMAKE_PREFIX_PATH ${CONFIG_PATH})
+        set(${CONFIG_NAME}_DIR INTERNAL FORCE ${CONFIG_PATH})
+        set(${CONFIG_NAME}_ROOT ${CONFIG_PATH})
 
     endif()
     
